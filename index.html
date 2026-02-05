@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GRAPLR: Locker Update</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Segoe UI', sans-serif; touch-action: none; color: #ecf0f1; }
+        canvas { display: block; }
+        .bubble-title { font-size: 80px; font-weight: 900; color: #70a1ff; margin: 0; letter-spacing: -3px; text-shadow: 4px 4px 0px #1e272e; }
+        .bubble-leaderboard { font-size: 50px; font-weight: 900; color: #70a1ff; margin-bottom: 20px; letter-spacing: -2px; text-shadow: 3px 3px 0px #1e272e; text-transform: uppercase; }
+        
+        #overlay, #locker-menu, #leaderboard-menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(20, 25, 45, 0.98) 0%, rgba(5, 5, 10, 1) 100%); z-index: 100; }
+        #locker-menu, #leaderboard-menu { display: none; z-index: 200; }
+        
+        .currency-display { color: #eccc68; font-size: 20px; margin-bottom: 10px; font-weight: bold; }
+        .locker-coins { background: rgba(236, 204, 104, 0.1); padding: 8px 20px; border-radius: 20px; border: 1px solid #eccc68; color: #eccc68; font-weight: 900; font-size: 18px; margin-bottom: 15px; }
+        
+        button { padding: 15px 35px; background: #70a1ff; color: #020205; border: none; cursor: pointer; margin: 8px; font-weight: bold; border-radius: 50px; font-size: 16px; box-shadow: 0 4px 0 #1e56b8; }
+        button.secondary { background: #3d4259; color: white; box-shadow: 0 4px 0 #1a1c2c; }
+
+        .tabs { display: flex; gap: 8px; margin-bottom: 15px; }
+        .tab-btn { padding: 10px 20px; background: #2d345a; border-radius: 12px; cursor: pointer; font-size: 13px; font-weight: bold; }
+        .tab-btn.active { background: #70a1ff; color: #020205; }
+
+        .locker-container { width: 90%; max-width: 500px; height: 40vh; overflow-y: auto; padding-right: 10px; }
+        .locker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        .item-card { background: #1a1e32; padding: 15px 10px; border-radius: 15px; border: 2px solid transparent; cursor: pointer; text-align: center; }
+        .item-card.equipped { border-color: #70a1ff; background: #262c4a; }
+
+        .leaderboard-table { width: 90%; max-width: 400px; border-collapse: collapse; font-size: 16px; font-weight: bold; }
+        .leaderboard-table td { padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .rank-num { color: #70a1ff; width: 40px; }
+        .player-name { text-align: left !important; }
+        .player-score { color: #eccc68; }
+
+        #stats { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 14px; background: rgba(0, 0, 0, 0.7); padding: 12px 20px; border-radius: 50px; display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.1); }
+        #submit-btn { background: #2ed573; color: #020205; padding: 5px 12px; border-radius: 20px; font-size: 11px; border: none; cursor: pointer; font-weight: bold; }
+        input[type="text"] { background: #1a1e32; border: 1px solid #70a1ff; color: white; padding: 10px; border-radius: 10px; text-align: center; margin-bottom: 10px; outline: none; }
+    </style>
+</head>
+<body>
+
+    <div id="stats">
+        <div>💰 <span id="bits-ui">0</span></div>
+        <div>ALT: <span id="alt">0</span>m</div>
+        <button id="submit-btn" onclick="submitRun()">SUBMIT</button>
+    </div>
+    
+    <div id="overlay">
+        <h1 class="bubble-title">graplr</h1>
+        <input type="text" id="username" placeholder="NAME..." onchange="updateName(this.value)">
+        <div class="currency-display">BEST: <span id="high-score">0</span>m</div>
+        <button onclick="startGame()">PLAY</button>
+        <button class="secondary" onclick="toggleLocker(true)">LOCKER</button>
+        <button class="secondary" onclick="toggleLeaderboard(true)">GLOBAL</button>
+    </div>
+
+    <div id="locker-menu">
+        <h2 style="color:#70a1ff; margin-bottom: 5px;">COLLECTION</h2>
+        <div class="locker-coins">💰 <span id="locker-coin-count">0</span> BITS</div>
+        
+        <div class="tabs">
+            <div id="t-skins" class="tab-btn active" onclick="setTab('skins')">SKINS</div>
+            <div id="t-hooks" class="tab-btn" onclick="setTab('hooks')">HOOKS</div>
+            <div id="t-trails" class="tab-btn" onclick="setTab('trails')">TRAILS</div>
+        </div>
+        <div class="locker-container">
+            <div id="locker-items" class="locker-grid"></div>
+        </div>
+        <button class="secondary" style="margin-top:15px;" onclick="toggleLocker(false)">BACK</button>
+    </div>
+
+    <div id="leaderboard-menu">
+        <h2 class="bubble-leaderboard">LEADERBOARD</h2>
+        <table class="leaderboard-table">
+            <tbody id="leaderboard-body"></tbody>
+        </table>
+        <button class="secondary" style="margin-top:20px;" onclick="toggleLeaderboard(false)">BACK</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const ITEMS = { skins: [], hooks: [], trails: [] };
+const colors = ["#70a1ff", "#00ffcc", "#ff4757", "#2ed573", "#eccc68", "#1e272e", "#ff6b6b", "#7efff5", "#2f3542", "#ffffff", "#05c46b", "#0fbcf9", "#ef5777", "#d2dae2", "#f53b57", "#34e7e4", "#ffa801", "#6c5ce7", "#00d2d3", "rainbow"];
+for(let i=0; i<20; i++) ITEMS.skins.push({ id: 's'+i, name: 'Skin '+(i+1), color: colors[i] || 'white', cost: i*200 });
+for(let i=0; i<15; i++) ITEMS.hooks.push({ id: 'h'+i, name: 'Hook '+(i+1), color: colors[i] || 'white', cost: 150+(i*100) });
+for(let i=0; i<15; i++) ITEMS.trails.push({ id: 't'+i, name: 'Trail '+(i+1), color: colors[i] || 'white', cost: 100+(i*100) });
+
+let save = JSON.parse(localStorage.getItem('graplr_v_final')) || {
+    bits: 500, highScore: 0, name: "PLAYER" + Math.floor(Math.random()*999),
+    eq: { skins: 's0', hooks: 'h0', trails: 't0' },
+    unlocked: { skins: ['s0'], hooks: ['h0'], trails: ['t0'] }
+};
+
+function saveGame() {
+    localStorage.setItem('graplr_v_final', JSON.stringify(save));
+    document.getElementById('bits-ui').innerText = save.bits;
+    document.getElementById('locker-coin-count').innerText = save.bits; // Update Locker Count
+    document.getElementById('high-score').innerText = save.highScore;
+}
+
+document.getElementById('username').value = save.name;
+
+let activeTab = 'skins', isStarted = false, ledges = [], coins = [], camY = 0, tick = 0, sessionCoins = 0;
+let isAiming = false, chargePower = 0, targetAngle = -Math.PI/2, touchStartPos = {x:0, y:0}, touchCurrentPos = {x:0, y:0};
+let trailBuffer = [];
+const me = { x: 0, y: 0, vx: 0, vy: 0, r: 14, hook: { x: 0, y: 0, vx: 0, vy: 0, active: false, attached: false, reeling: false } };
+
+function updateName(val) { save.name = val.toUpperCase(); saveGame(); }
+
+function submitRun() {
+    let alt = Math.max(0, Math.floor((canvas.height - 150 - me.y) / 10));
+    if(alt > save.highScore) save.highScore = alt;
+    saveGame();
+    alert(`SUBMITTED!\nALT: ${alt}m\nCOINS: ${sessionCoins}`);
+}
+
+function toggleLocker(show) { document.getElementById('locker-menu').style.display = show ? 'flex' : 'none'; if(show) renderLocker(); }
+function setTab(t) { activeTab = t; document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById('t-'+t).classList.add('active'); renderLocker(); }
+
+function renderLocker() {
+    document.getElementById('locker-coin-count').innerText = save.bits;
+    const grid = document.getElementById('locker-items'); grid.innerHTML = '';
+    ITEMS[activeTab].forEach(item => {
+        const has = save.unlocked[activeTab].includes(item.id);
+        const eq = save.eq[activeTab] === item.id;
+        const card = document.createElement('div');
+        card.className = `item-card ${eq ? 'equipped' : ''}`;
+        card.innerHTML = `<div style="width:30px;height:30px;background:${item.color === 'rainbow' ? 'linear-gradient(45deg, red, blue)' : item.color};border-radius:50%;margin:0 auto 8px;"></div><div style="font-size:10px;">${item.name}</div><div style="font-size:10px;color:#eccc68;">${has ? (eq ? '✓' : 'USE') : item.cost}</div>`;
+        card.onclick = () => { if(has) save.eq[activeTab] = item.id; else if(save.bits >= item.cost) { save.bits -= item.cost; save.unlocked[activeTab].push(item.id); save.eq[activeTab] = item.id; } saveGame(); renderLocker(); };
+        grid.appendChild(card);
+    });
+}
+
+function toggleLeaderboard(show) {
+    document.getElementById('leaderboard-menu').style.display = show ? 'flex' : 'none';
+    if(show) {
+        let humans = [{n: "SKYHIGH", a: 5200, c: 140},{n: "CLIMBX", a: 3100, c: 88},{n: "ROPEBURN", a: 2100, c: 40},{n: save.name, a: save.highScore, c: sessionCoins},{n: "ZIPLINE", a: 1800, c: 30},{n: "MOONSHOT", a: 1550, c: 25},{n: "GRAPPLEFAN", a: 900, c: 10}];
+        let botCount = Math.max(1, Math.floor(humans.length / 9)); 
+        for(let i=0; i<botCount; i++) humans.push({n: "G-UNIT", a: 2400, c: 55});
+        document.getElementById('leaderboard-body').innerHTML = humans.sort((a,b) => b.a - a.a).map((p, i) => `<tr><td class="rank-num">#${i+1}</td><td class="player-name">${p.n}</td><td class="player-score">${p.a}m</td><td style="opacity:0.6">${p.c}</td></tr>`).join('');
+    }
+}
+
+function startGame() {
+    document.getElementById('overlay').style.display = 'none';
+    me.x = canvas.width/2; me.y = canvas.height - 150; me.vx = me.vy = 0; me.hook.active = false;
+    sessionCoins = 0;
+    ledges = [{ x: 0, y: canvas.height - 50, w: canvas.width, h: 100, floor: true }];
+    coins = [];
+    for(let i=1; i<500; i++) {
+        let ly = (canvas.height - 150) - (i * 180);
+        ledges.push({ x: Math.random()*(canvas.width-120)+60, y: ly, w: 100, h: 15 });
+        if(i % 3 === 0) coins.push({ x: Math.random()*(canvas.width-100)+50, y: ly - 40, collected: false });
+    }
+    isStarted = true;
+}
+
+window.addEventListener('touchstart', e => {
+    if(!isStarted || e.target.id === "submit-btn" || e.target.id === "username") return;
+    const touch = e.touches[0];
+    if(me.hook.active) me.hook.reeling = true;
+    else { isAiming = true; touchStartPos = {x: touch.clientX, y: touch.clientY}; touchCurrentPos = {x: touch.clientX, y: touch.clientY}; }
+});
+
+window.addEventListener('touchmove', e => {
+    if(!isAiming) return;
+    touchCurrentPos = {x: e.touches[0].clientX, y: e.touches[0].clientY};
+    let dx = touchCurrentPos.x - touchStartPos.x, dy = touchCurrentPos.y - touchStartPos.y;
+    targetAngle = Math.atan2(dy, dx);
+    chargePower = Math.min(1, Math.hypot(dx, dy)/150);
+});
+
+window.addEventListener('touchend', () => {
+    if(isAiming) {
+        isAiming = false;
+        if(chargePower > 0.1) {
+            me.hook.x = me.x; me.hook.y = me.y;
+            me.hook.vx = Math.cos(targetAngle) * (12 + chargePower * 25);
+            me.hook.vy = Math.sin(targetAngle) * (12 + chargePower * 25);
+            me.hook.active = true; me.hook.attached = false; me.hook.reeling = false;
+        }
+    } else if(me.hook.active) {
+        if(me.hook.reeling) { me.hook.reeling = false; me.hook.active = false; }
+    }
+});
+
+function loop() {
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    if(!isStarted) { requestAnimationFrame(loop); return; }
+    tick++;
+    if(me.hook.active) {
+        if(me.hook.attached) {
+            let dx = me.hook.x - me.x, dy = me.hook.y - me.y, d = Math.hypot(dx, dy);
+            let p = me.hook.reeling ? 1.8 : 0.8;
+            me.vx += (dx/d)*p; me.vy += (dy/d)*p;
+        } else if(me.hook.reeling) { 
+            let dx = me.x - me.hook.x, dy = me.y - me.hook.y, d = Math.hypot(dx, dy);
+            if(d < 30) me.hook.active = false;
+            else { me.hook.x += (dx/d)*35; me.hook.y += (dy/d)*35; }
+        } else {
+            me.hook.vx *= 0.98; me.hook.vy *= 0.98; me.hook.vy += 0.35;
+            me.hook.x += me.hook.vx; me.hook.y += me.hook.vy;
+            ledges.forEach(l => { if(me.hook.x > l.x && me.hook.x < l.x+l.w && me.hook.y > l.y && me.hook.y < l.y+l.h) me.hook.attached = true; });
+        }
+    }
+    me.vy += 0.38; me.vx *= 0.97; me.vy *= 0.99;
+    me.x += me.vx; me.y += me.vy;
+    ledges.forEach(l => { if(me.vy > 0 && me.y+me.r >= l.y && me.y+me.r <= l.y+20 && me.x > l.x && me.x < l.x+l.w) { me.y = l.y-me.r; me.vy = 0; } });
+    coins.forEach(c => { if(!c.collected && Math.hypot(me.x - c.x, me.y - c.y) < 30) { c.collected = true; save.bits += 50; sessionCoins++; saveGame(); } });
+    camY = -me.y + (canvas.height * 0.7);
+    document.getElementById('alt').innerText = Math.max(0, Math.floor((canvas.height - 150 - me.y) / 10));
+    ctx.fillStyle = "#050510"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.save(); ctx.translate(0, camY);
+    const tItem = ITEMS.trails.find(i => i.id === save.eq.trails);
+    if(tItem.id !== 't0') {
+        trailBuffer.push({x:me.x, y:me.y}); if(trailBuffer.length > 15) trailBuffer.shift();
+        trailBuffer.forEach((p,i) => { ctx.globalAlpha = i/15; ctx.fillStyle = tItem.color === 'rainbow' ? `hsl(${tick*5},80%,50%)` : tItem.color; ctx.beginPath(); ctx.arc(p.x, p.y, (i/15)*10, 0, 7); ctx.fill(); });
+    }
+    ctx.globalAlpha = 1;
+    ledges.forEach(l => { ctx.fillStyle = "#334155"; ctx.fillRect(l.x, l.y, l.w, l.h); });
+    coins.forEach(c => { if(!c.collected) { ctx.fillStyle = "#fbbf24"; ctx.beginPath(); ctx.arc(c.x, c.y + Math.sin(tick*0.1)*5, 10, 0, 7); ctx.fill(); } });
+    const hItem = ITEMS.hooks.find(i => i.id === save.eq.hooks);
+    if(me.hook.active) {
+        ctx.strokeStyle = hItem.color === 'rainbow' ? `hsl(${tick*5},80%,50%)` : hItem.color; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(me.hook.x, me.hook.y); ctx.stroke();
+    }
+    const sItem = ITEMS.skins.find(i => i.id === save.eq.skins);
+    ctx.fillStyle = sItem.color === 'rainbow' ? `hsl(${tick*5},80%,50%)` : sItem.color;
+    ctx.beginPath(); ctx.arc(me.x, me.y, me.r, 0, 7); ctx.fill();
+    ctx.restore();
+    if(isAiming) {
+        ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.beginPath(); ctx.arc(touchStartPos.x, touchStartPos.y, 40, 0, 7); ctx.stroke();
+        ctx.save(); ctx.translate(0, camY);
+        ctx.strokeStyle = "white"; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(me.x, me.y);
+        ctx.lineTo(me.x + Math.cos(targetAngle)*200*chargePower, me.y + Math.sin(targetAngle)*200*chargePower); ctx.stroke();
+        ctx.restore();
+    }
+    requestAnimationFrame(loop);
+}
+saveGame(); loop();
+</script>
+</body>
+</html>
